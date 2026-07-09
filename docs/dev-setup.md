@@ -32,7 +32,7 @@ python -m pip install -e .
 没有下位机时，先用模拟模式验证界面、曲线和 CSV 录制：
 
 ```text
-双击 Start-PID-HOST-Demo.bat
+双击 Start-PID-HOST-Demo-Hidden.vbs
 ```
 
 或在命令行执行：
@@ -50,9 +50,9 @@ python -m pid_host --demo
 
 ## 连接真实下位机
 
-桌面上的 `PID-HOST` 快捷方式会启动真实串口模式，图标文件来自 `assets/pid-host.ico`。
+桌面上的 `PID-HOST` 快捷方式会通过 `Start-PID-HOST-Hidden.vbs` 启动真实串口模式，不显示终端窗口。图标文件来自 `assets/pid-host.ico`。
 
-双击 `Start-PID-HOST.bat` 可启动真实串口模式。
+双击 `Start-PID-HOST-Hidden.vbs` 可启动真实串口模式；如果需要看启动日志，再双击 `Start-PID-HOST.bat`。
 
 默认串口参数：
 
