@@ -43,13 +43,21 @@ def test_pid_parameter_step_buttons_increase_and_decrease_values():
     app = QApplication.instance() or QApplication([])
     window = MainWindow(demo_mode=False)
 
+    assert window.step_spin.value() == 0.02
+
     start = window.kp_spin.value()
     window.kp_increase_button.click()
-    assert window.kp_spin.value() > start
+    assert window.kp_spin.value() == start + 0.02
 
     increased = window.kp_spin.value()
     window.kp_decrease_button.click()
     assert window.kp_spin.value() < increased
+    assert window.kp_spin.value() == start
+
+    row_layout = window.kp_spin.parentWidget().layout()
+    assert row_layout.itemAt(0).widget() is window.kp_spin
+    assert row_layout.itemAt(1).widget() is window.kp_decrease_button
+    assert row_layout.itemAt(2).widget() is window.kp_increase_button
 
     window.close()
     app.processEvents()

@@ -153,10 +153,12 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         form = QFormLayout()
+        self.step_spin = self._step_spin()
         kp_row, self.kp_spin, self.kp_decrease_button, self.kp_increase_button = self._parameter_control(1.0)
         ki_row, self.ki_spin, self.ki_decrease_button, self.ki_increase_button = self._parameter_control(0.0)
         kd_row, self.kd_spin, self.kd_decrease_button, self.kd_increase_button = self._parameter_control(0.0)
         sp_row, self.sp_spin, self.sp_decrease_button, self.sp_increase_button = self._parameter_control(50.0)
+        form.addRow("步长", self.step_spin)
         form.addRow("Kp", kp_row)
         form.addRow("Ki", ki_row)
         form.addRow("Kd", kd_row)
@@ -194,8 +196,18 @@ class MainWindow(QMainWindow):
         spin.setDecimals(4)
         spin.setRange(-1_000_000.0, 1_000_000.0)
         spin.setValue(value)
-        spin.setSingleStep(0.1)
+        spin.setSingleStep(self.step_spin.value())
         spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        return spin
+
+    def _step_spin(self) -> QDoubleSpinBox:
+        spin = QDoubleSpinBox()
+        spin.setDecimals(4)
+        spin.setRange(0.0001, 1000.0)
+        spin.setValue(0.02)
+        spin.setSingleStep(0.01)
+        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        spin.valueChanged.connect(self._update_parameter_step)
         return spin
 
     def _parameter_control(self, value: float) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
@@ -219,10 +231,20 @@ class MainWindow(QMainWindow):
 
         decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
         increase.clicked.connect(lambda _checked=False, target=spin: target.stepUp())
-        layout.addWidget(decrease)
         layout.addWidget(spin, stretch=1)
+        layout.addWidget(decrease)
         layout.addWidget(increase)
         return row, spin, decrease, increase
+
+    def _update_parameter_step(self, step: float) -> None:
+        for spin in (
+            getattr(self, "kp_spin", None),
+            getattr(self, "ki_spin", None),
+            getattr(self, "kd_spin", None),
+            getattr(self, "sp_spin", None),
+        ):
+            if spin is not None:
+                spin.setSingleStep(step)
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
