@@ -110,6 +110,13 @@ class MainWindow(QMainWindow):
         plot_layout.addWidget(self.plot)
         body.addWidget(plot_panel, stretch=1)
 
+        log_header = QHBoxLayout()
+        self.clear_log_button = QPushButton("清空通信日志")
+        self.clear_log_button.setObjectName("secondaryAction")
+        log_header.addStretch(1)
+        log_header.addWidget(self.clear_log_button)
+        outer.addLayout(log_header)
+
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setFixedHeight(140)
@@ -395,6 +402,7 @@ class MainWindow(QMainWindow):
         self.copy_to_other_button.clicked.connect(self.copy_current_to_other_motor)
         self.pause_button.clicked.connect(self.toggle_pause)
         self.clear_button.clicked.connect(self.clear_plot)
+        self.clear_log_button.clicked.connect(self.clear_communication_log)
         self.demo_checkbox.toggled.connect(self._set_demo_mode)
         self.motor_tabs.currentChanged.connect(self._on_channel_changed)
         self.kp_spin.valueChanged.connect(self._on_parameter_value_changed)
@@ -668,6 +676,9 @@ class MainWindow(QMainWindow):
         self.refresh_plot()
         self._refresh_latest_values()
         self.log("曲线已清空")
+
+    def clear_communication_log(self) -> None:
+        self.log_view.clear()
 
     def toggle_recording(self) -> None:
         if self.recorder.is_recording:

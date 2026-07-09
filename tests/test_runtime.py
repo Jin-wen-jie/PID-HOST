@@ -204,3 +204,35 @@ def test_main_window_filters_latest_values_and_plot_by_selected_motor_channel():
 
     window.close()
     app.processEvents()
+
+
+def test_clear_communication_log_button_clears_bottom_log_only():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from pid_host.data import TelemetrySample
+    from pid_host.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(demo_mode=False)
+    window.kp_spin.setValue(1.23)
+    window.add_telemetry(
+        TelemetrySample("2026-07-09T10:00:00.000", device_time_ms=1000, ch=0, sp=50.0, pv=48.0, out=30.0)
+    )
+    window.log("TX {\"type\":\"hello\",\"seq\":1}")
+    window.log("RX {\"type\":\"ack\",\"seq\":1}")
+    window.log("ACK：hello")
+
+    assert "TX" in window.log_view.toPlainText()
+    assert len(window.buffer.samples()) == 1
+
+    window.clear_log_button.click()
+
+    assert window.log_view.toPlainText() == ""
+    assert len(window.buffer.samples()) == 1
+    assert window.kp_spin.value() == 1.23
+    assert window.current_pv_label.text() == "48"
+
+    window.close()
+    app.processEvents()
