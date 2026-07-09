@@ -6,6 +6,7 @@ from pathlib import Path
 import pyqtgraph as pg
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -151,14 +153,14 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         form = QFormLayout()
-        self.kp_spin = self._double_spin(1.0)
-        self.ki_spin = self._double_spin(0.0)
-        self.kd_spin = self._double_spin(0.0)
-        self.sp_spin = self._double_spin(50.0)
-        form.addRow("Kp", self.kp_spin)
-        form.addRow("Ki", self.ki_spin)
-        form.addRow("Kd", self.kd_spin)
-        form.addRow("SP", self.sp_spin)
+        kp_row, self.kp_spin, self.kp_decrease_button, self.kp_increase_button = self._parameter_control(1.0)
+        ki_row, self.ki_spin, self.ki_decrease_button, self.ki_increase_button = self._parameter_control(0.0)
+        kd_row, self.kd_spin, self.kd_decrease_button, self.kd_increase_button = self._parameter_control(0.0)
+        sp_row, self.sp_spin, self.sp_decrease_button, self.sp_increase_button = self._parameter_control(50.0)
+        form.addRow("Kp", kp_row)
+        form.addRow("Ki", ki_row)
+        form.addRow("Kd", kd_row)
+        form.addRow("SP", sp_row)
         layout.addLayout(form)
 
         self.send_pid_button = QPushButton("发送 PID")
@@ -193,7 +195,34 @@ class MainWindow(QMainWindow):
         spin.setRange(-1_000_000.0, 1_000_000.0)
         spin.setValue(value)
         spin.setSingleStep(0.1)
+        spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         return spin
+
+    def _parameter_control(self, value: float) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        spin = self._double_spin(value)
+        decrease = QToolButton()
+        increase = QToolButton()
+        for button, text, tooltip in (
+            (decrease, "-", "减少参数"),
+            (increase, "+", "增加参数"),
+        ):
+            button.setObjectName("paramStepButton")
+            button.setText(text)
+            button.setToolTip(tooltip)
+            button.setAutoRepeat(True)
+            button.setFixedWidth(28)
+
+        decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
+        increase.clicked.connect(lambda _checked=False, target=spin: target.stepUp())
+        layout.addWidget(decrease)
+        layout.addWidget(spin, stretch=1)
+        layout.addWidget(increase)
+        return row, spin, decrease, increase
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
@@ -202,6 +231,9 @@ class MainWindow(QMainWindow):
             QPushButton { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 6px 10px; }
             QPushButton:hover { border-color: #2563eb; }
             QPushButton:disabled { color: #8a94a6; background: #edf1f5; }
+            QToolButton#paramStepButton { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 4px; font-weight: 700; }
+            QToolButton#paramStepButton:hover { border-color: #2563eb; color: #0f5132; }
+            QToolButton#paramStepButton:pressed { background: #dbeafe; }
             QComboBox, QDoubleSpinBox { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 4px; }
             QFrame#sidebar { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; }
             QTextEdit { background: #101827; color: #d5e1f5; border: 1px solid #263247; border-radius: 4px; font-family: Consolas, monospace; }
