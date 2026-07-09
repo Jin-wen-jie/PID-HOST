@@ -153,12 +153,12 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         form = QFormLayout()
-        self.step_spin = self._step_spin()
+        step_row, self.step_spin, self.step_decrease_button, self.step_increase_button = self._step_control()
         kp_row, self.kp_spin, self.kp_decrease_button, self.kp_increase_button = self._parameter_control(1.0)
         ki_row, self.ki_spin, self.ki_decrease_button, self.ki_increase_button = self._parameter_control(0.0)
         kd_row, self.kd_spin, self.kd_decrease_button, self.kd_increase_button = self._parameter_control(0.0)
         sp_row, self.sp_spin, self.sp_decrease_button, self.sp_increase_button = self._parameter_control(50.0)
-        form.addRow("步长", self.step_spin)
+        form.addRow("步长", step_row)
         form.addRow("Kp", kp_row)
         form.addRow("Ki", ki_row)
         form.addRow("Kd", kd_row)
@@ -210,6 +210,22 @@ class MainWindow(QMainWindow):
         spin.valueChanged.connect(self._update_parameter_step)
         return spin
 
+    def _step_control(self) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        spin = self._step_spin()
+        decrease = self._step_button("-", "减少步长")
+        increase = self._step_button("+", "增加步长")
+        decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
+        increase.clicked.connect(lambda _checked=False, target=spin: target.stepUp())
+        layout.addWidget(spin, stretch=1)
+        layout.addWidget(decrease)
+        layout.addWidget(increase)
+        return row, spin, decrease, increase
+
     def _parameter_control(self, value: float) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
         row = QWidget()
         layout = QHBoxLayout(row)
@@ -217,24 +233,23 @@ class MainWindow(QMainWindow):
         layout.setSpacing(4)
 
         spin = self._double_spin(value)
-        decrease = QToolButton()
-        increase = QToolButton()
-        for button, text, tooltip in (
-            (decrease, "-", "减少参数"),
-            (increase, "+", "增加参数"),
-        ):
-            button.setObjectName("paramStepButton")
-            button.setText(text)
-            button.setToolTip(tooltip)
-            button.setAutoRepeat(True)
-            button.setFixedWidth(28)
-
+        decrease = self._step_button("-", "减少参数")
+        increase = self._step_button("+", "增加参数")
         decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
         increase.clicked.connect(lambda _checked=False, target=spin: target.stepUp())
         layout.addWidget(spin, stretch=1)
         layout.addWidget(decrease)
         layout.addWidget(increase)
         return row, spin, decrease, increase
+
+    def _step_button(self, text: str, tooltip: str) -> QToolButton:
+        button = QToolButton()
+        button.setObjectName("paramStepButton")
+        button.setText(text)
+        button.setToolTip(tooltip)
+        button.setAutoRepeat(True)
+        button.setFixedWidth(28)
+        return button
 
     def _update_parameter_step(self, step: float) -> None:
         for spin in (
