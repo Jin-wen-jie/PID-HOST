@@ -31,6 +31,12 @@ python -m pip install -e .
 
 没有下位机时，先用模拟模式验证界面、曲线和 CSV 录制：
 
+```text
+双击 Start-PID-HOST-Demo.bat
+```
+
+或在命令行执行：
+
 ```powershell
 pid-host --demo
 ```
@@ -43,6 +49,8 @@ python -m pid_host --demo
 ```
 
 ## 连接真实下位机
+
+双击 `Start-PID-HOST.bat` 可启动真实串口模式。
 
 默认串口参数：
 

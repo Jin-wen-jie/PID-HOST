@@ -24,6 +24,13 @@ PID-HOST 是一个面向 Windows 桌面的 PID 上位机项目，用于通过 UA
 
 ## 快速开始
 
+双击启动：
+
+- `Start-PID-HOST.bat`：真实串口模式
+- `Start-PID-HOST-Demo.bat`：模拟数据模式
+
+首次运行前建议先安装依赖：
+
 ```powershell
 python -m pip install -r requirements.txt
 python -m pip install -e .
