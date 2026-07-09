@@ -50,6 +50,8 @@ python -m pid_host --demo
 
 ## 连接真实下位机
 
+桌面上的 `PID-HOST` 快捷方式会启动真实串口模式，图标文件来自 `assets/pid-host.ico`。
+
 双击 `Start-PID-HOST.bat` 可启动真实串口模式。
 
 默认串口参数：

@@ -26,6 +26,7 @@ PID-HOST 是一个面向 Windows 桌面的 PID 上位机项目，用于通过 UA
 
 双击启动：
 
+- 桌面 `PID-HOST` 快捷方式：真实串口模式
 - `Start-PID-HOST.bat`：真实串口模式
 - `Start-PID-HOST-Demo.bat`：模拟数据模式
 
