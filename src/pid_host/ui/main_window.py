@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSizePolicy,
+    QTabWidget,
     QTextEdit,
     QToolButton,
     QVBoxLayout,
@@ -150,15 +151,19 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         panel = QFrame()
         panel.setObjectName("sidebar")
-        panel.setFixedWidth(250)
+        panel.setFixedWidth(310)
         panel.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         layout = QVBoxLayout(panel)
         layout.setSpacing(10)
 
+        self.motor_tabs = QTabWidget()
+        self.motor_tabs.setObjectName("motorTabs")
+        self.channel_summary_labels: dict[int, dict[str, QLabel]] = {}
+        self.motor_tabs.addTab(self._build_motor_tab(0), "电机1")
+        self.motor_tabs.addTab(self._build_motor_tab(1), "电机2")
+        layout.addWidget(self.motor_tabs)
+
         form = QFormLayout()
-        self.channel_combo = QComboBox()
-        self.channel_combo.addItem("电机1 (CH0)", 0)
-        self.channel_combo.addItem("电机2 (CH1)", 1)
         (
             pid_step_row,
             self.pid_step_spin,
@@ -183,7 +188,6 @@ class MainWindow(QMainWindow):
             self.sp_step_spin.value(),
         )
         self.sp_step_spin.valueChanged.connect(self._update_sp_step)
-        form.addRow("电机", self.channel_combo)
         form.addRow("PID步长", pid_step_row)
         form.addRow("Kp", kp_row)
         form.addRow("Ki", ki_row)
@@ -193,9 +197,17 @@ class MainWindow(QMainWindow):
         layout.addLayout(form)
 
         self.send_pid_button = QPushButton("发送 PID")
+        self.send_pid_button.setObjectName("primaryAction")
         self.send_sp_button = QPushButton("发送目标值")
-        layout.addWidget(self.send_pid_button)
-        layout.addWidget(self.send_sp_button)
+        self.send_sp_button.setObjectName("primaryAction")
+        self.copy_to_other_button = QPushButton("复制到另一个电机")
+        self.copy_to_other_button.setObjectName("secondaryAction")
+        action_row = QGridLayout()
+        action_row.setSpacing(6)
+        action_row.addWidget(self.send_pid_button, 0, 0)
+        action_row.addWidget(self.send_sp_button, 0, 1)
+        action_row.addWidget(self.copy_to_other_button, 1, 0, 1, 2)
+        layout.addLayout(action_row)
 
         values = QGridLayout()
         self.current_sp_label = QLabel("-")
@@ -217,6 +229,53 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.raw_checkbox)
         layout.addStretch(1)
         return panel
+
+    def _build_motor_tab(self, ch: int) -> QWidget:
+        tab = QWidget()
+        layout = QGridLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setHorizontalSpacing(10)
+        layout.setVerticalSpacing(5)
+
+        labels: dict[str, QLabel] = {}
+        rows = (
+            ("channel", "通道", f"CH{ch}"),
+            ("kp", "Kp", "-"),
+            ("ki", "Ki", "-"),
+            ("kd", "Kd", "-"),
+            ("sp", "SP", "-"),
+            ("pv", "PV", "-"),
+            ("out", "OUT", "-"),
+        )
+        for row, (key, name, value) in enumerate(rows):
+            name_label = QLabel(name)
+            name_label.setObjectName("summaryName")
+            value_label = QLabel(value)
+            value_label.setObjectName("summaryValue")
+            labels[key] = value_label
+            layout.addWidget(name_label, row, 0)
+            layout.addWidget(value_label, row, 1)
+        self.channel_summary_labels[ch] = labels
+        self._sync_channel_summary(ch)
+        return tab
+
+    def _sync_channel_summary(self, ch: int) -> None:
+        labels = getattr(self, "channel_summary_labels", {}).get(ch)
+        if labels is None:
+            return
+        values = self.channel_values.get(ch, PidChannelConfig(ch=ch))
+        labels["channel"].setText(f"CH{ch}")
+        labels["kp"].setText(self._format_value(values.kp))
+        labels["ki"].setText(self._format_value(values.ki))
+        labels["kd"].setText(self._format_value(values.kd))
+        labels["sp"].setText(self._format_value(values.sp))
+        latest = self.buffer.latest(ch=ch)
+        if latest is not None:
+            labels["pv"].setText(self._format_value(latest.pv))
+            labels["out"].setText(self._format_value(latest.out))
+
+    def _format_value(self, value: float) -> str:
+        return f"{value:.4g}"
 
     def _double_spin(self, value: float, step: float | None = None) -> QDoubleSpinBox:
         spin = QDoubleSpinBox()
@@ -305,11 +364,20 @@ class MainWindow(QMainWindow):
             QMainWindow, QWidget { background: #eef2f7; color: #172033; font-size: 13px; }
             QPushButton { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 6px 10px; }
             QPushButton:hover { border-color: #2563eb; }
+            QPushButton#primaryAction { background: #123c69; color: #ffffff; border-color: #123c69; font-weight: 600; }
+            QPushButton#primaryAction:hover { background: #0f5132; border-color: #0f5132; }
+            QPushButton#secondaryAction { background: #fff7ed; border-color: #d97706; color: #7c2d12; }
+            QPushButton#secondaryAction:hover { background: #ffedd5; border-color: #b45309; }
             QPushButton:disabled { color: #8a94a6; background: #edf1f5; }
             QToolButton#paramStepButton { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 4px; font-weight: 700; }
             QToolButton#paramStepButton:hover { border-color: #2563eb; color: #0f5132; }
             QToolButton#paramStepButton:pressed { background: #dbeafe; }
             QComboBox, QDoubleSpinBox { background: #ffffff; border: 1px solid #b9c2cf; border-radius: 4px; padding: 4px; }
+            QTabWidget#motorTabs::pane { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 6px; top: -1px; }
+            QTabWidget#motorTabs QTabBar::tab { background: #e2e8f0; border: 1px solid #cbd5e1; border-bottom: none; border-top-left-radius: 5px; border-top-right-radius: 5px; padding: 6px 18px; font-weight: 600; }
+            QTabWidget#motorTabs QTabBar::tab:selected { background: #ffffff; color: #123c69; border-color: #94a3b8; }
+            QLabel#summaryName { color: #5b667a; font-size: 12px; }
+            QLabel#summaryValue { color: #172033; font-family: Consolas, monospace; font-weight: 700; }
             QFrame#sidebar { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; }
             QTextEdit { background: #101827; color: #d5e1f5; border: 1px solid #263247; border-radius: 4px; font-family: Consolas, monospace; }
             QLabel { background: transparent; }
@@ -324,14 +392,18 @@ class MainWindow(QMainWindow):
         self.load_config_button.clicked.connect(self.load_config)
         self.send_pid_button.clicked.connect(self.send_pid)
         self.send_sp_button.clicked.connect(self.send_sp)
+        self.copy_to_other_button.clicked.connect(self.copy_current_to_other_motor)
         self.pause_button.clicked.connect(self.toggle_pause)
         self.clear_button.clicked.connect(self.clear_plot)
         self.demo_checkbox.toggled.connect(self._set_demo_mode)
-        self.channel_combo.currentIndexChanged.connect(self._on_channel_changed)
+        self.motor_tabs.currentChanged.connect(self._on_channel_changed)
+        self.kp_spin.valueChanged.connect(self._on_parameter_value_changed)
+        self.ki_spin.valueChanged.connect(self._on_parameter_value_changed)
+        self.kd_spin.valueChanged.connect(self._on_parameter_value_changed)
+        self.sp_spin.valueChanged.connect(self._on_parameter_value_changed)
 
     def _selected_channel(self) -> int:
-        data = self.channel_combo.currentData()
-        return int(data) if data is not None else 0
+        return self.motor_tabs.currentIndex()
 
     def _read_channel_values(self, ch: int) -> PidChannelConfig:
         return PidChannelConfig(
@@ -344,6 +416,7 @@ class MainWindow(QMainWindow):
 
     def _store_current_channel_values(self) -> None:
         self.channel_values[self.current_channel] = self._read_channel_values(self.current_channel)
+        self._sync_channel_summary(self.current_channel)
 
     def _load_channel_values(self, ch: int) -> None:
         values = self.channel_values.get(ch, PidChannelConfig(ch=ch))
@@ -351,6 +424,7 @@ class MainWindow(QMainWindow):
         self.ki_spin.setValue(values.ki)
         self.kd_spin.setValue(values.kd)
         self.sp_spin.setValue(values.sp)
+        self._sync_channel_summary(ch)
         self._refresh_latest_values()
 
     def _on_channel_changed(self, _index: int = -1) -> None:
@@ -363,6 +437,26 @@ class MainWindow(QMainWindow):
         self.current_channel = next_channel
         self._load_channel_values(next_channel)
         self.refresh_plot()
+
+    def _on_parameter_value_changed(self, *_args: object) -> None:
+        if self._loading_channel:
+            return
+        self.channel_values[self.current_channel] = self._read_channel_values(self.current_channel)
+        self._sync_channel_summary(self.current_channel)
+
+    def copy_current_to_other_motor(self) -> None:
+        self._store_current_channel_values()
+        target_channel = 1 - self.current_channel
+        values = self.channel_values[self.current_channel]
+        self.channel_values[target_channel] = PidChannelConfig(
+            ch=target_channel,
+            kp=values.kp,
+            ki=values.ki,
+            kd=values.kd,
+            sp=values.sp,
+        )
+        self.generator.set_sp(ch=target_channel, sp=values.sp)
+        self._sync_channel_summary(target_channel)
 
     def refresh_ports(self) -> None:
         current = self.port_combo.currentText()
@@ -534,15 +628,16 @@ class MainWindow(QMainWindow):
 
     def add_telemetry(self, sample: TelemetrySample) -> None:
         self.buffer.add(sample)
+        self._sync_channel_summary(sample.ch)
         if sample.ch == self.current_channel:
             self._show_latest_sample(sample)
         if self.recorder.is_recording:
             self.recorder.write(sample)
 
     def _show_latest_sample(self, sample: TelemetrySample) -> None:
-        self.current_sp_label.setText(f"{sample.sp:.4g}")
-        self.current_pv_label.setText(f"{sample.pv:.4g}")
-        self.current_out_label.setText(f"{sample.out:.4g}")
+        self.current_sp_label.setText(self._format_value(sample.sp))
+        self.current_pv_label.setText(self._format_value(sample.pv))
+        self.current_out_label.setText(self._format_value(sample.out))
 
     def _refresh_latest_values(self) -> None:
         sample = self.buffer.latest(ch=self.current_channel)
@@ -631,9 +726,7 @@ class MainWindow(QMainWindow):
         self._loading_channel = True
         try:
             self.current_channel = selected_ch
-            index = self.channel_combo.findData(selected_ch)
-            if index >= 0:
-                self.channel_combo.setCurrentIndex(index)
+            self.motor_tabs.setCurrentIndex(selected_ch)
             self._load_channel_values(selected_ch)
         finally:
             self._loading_channel = False

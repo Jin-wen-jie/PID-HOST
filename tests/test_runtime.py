@@ -101,14 +101,18 @@ def test_main_window_switches_between_independent_motor_channels():
     sent: list[tuple[str, dict[str, object]]] = []
     window._send_command = lambda message_type, **fields: sent.append((message_type, fields))
 
-    assert window.channel_combo.currentData() == 0
+    assert window.motor_tabs.tabText(0) == "电机1"
+    assert window.motor_tabs.tabText(1) == "电机2"
+    assert window.current_channel == 0
+    assert window.channel_summary_labels[0]["channel"].text() == "CH0"
+    assert window.channel_summary_labels[1]["channel"].text() == "CH1"
     window.kp_spin.setValue(1.2)
     window.ki_spin.setValue(0.05)
     window.kd_spin.setValue(0.01)
     window.sp_spin.setValue(50.0)
 
-    window.channel_combo.setCurrentIndex(1)
-    assert window.channel_combo.currentData() == 1
+    window.motor_tabs.setCurrentIndex(1)
+    assert window.current_channel == 1
     assert window.kp_spin.value() == 1.0
     assert window.ki_spin.value() == 0.0
     assert window.kd_spin.value() == 0.0
@@ -126,11 +130,40 @@ def test_main_window_switches_between_independent_motor_channels():
         ("set_sp", {"ch": 1, "sp": 80.0}),
     ]
 
-    window.channel_combo.setCurrentIndex(0)
+    window.motor_tabs.setCurrentIndex(0)
     assert window.kp_spin.value() == 1.2
     assert window.ki_spin.value() == 0.05
     assert window.kd_spin.value() == 0.01
     assert window.sp_spin.value() == 50.0
+
+    window.close()
+    app.processEvents()
+
+
+def test_main_window_copies_current_motor_pid_values_to_other_motor():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from pid_host.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(demo_mode=False)
+
+    window.kp_spin.setValue(1.4)
+    window.ki_spin.setValue(0.08)
+    window.kd_spin.setValue(0.03)
+    window.sp_spin.setValue(65.0)
+    window.copy_to_other_button.click()
+
+    window.motor_tabs.setCurrentIndex(1)
+
+    assert window.kp_spin.value() == 1.4
+    assert window.ki_spin.value() == 0.08
+    assert window.kd_spin.value() == 0.03
+    assert window.sp_spin.value() == 65.0
+    assert window.channel_summary_labels[1]["kp"].text() == "1.4"
+    assert window.channel_summary_labels[1]["sp"].text() == "65"
 
     window.close()
     app.processEvents()
@@ -158,10 +191,11 @@ def test_main_window_filters_latest_values_and_plot_by_selected_motor_channel():
     assert window.current_pv_label.text() == "48"
     assert window.current_out_label.text() == "30"
 
-    window.channel_combo.setCurrentIndex(1)
+    window.motor_tabs.setCurrentIndex(1)
     assert window.current_sp_label.text() == "80"
     assert window.current_pv_label.text() == "75"
     assert window.current_out_label.text() == "45"
+    assert window.channel_summary_labels[1]["pv"].text() == "75"
 
     window.refresh_plot()
     x, y = window.curve_sp.getData()
