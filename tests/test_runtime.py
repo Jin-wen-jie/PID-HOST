@@ -43,11 +43,12 @@ def test_pid_parameter_step_buttons_increase_and_decrease_values():
     app = QApplication.instance() or QApplication([])
     window = MainWindow(demo_mode=False)
 
-    assert window.step_spin.value() == 0.02
-    window.step_increase_button.click()
-    assert window.step_spin.value() == 0.03
-    window.step_decrease_button.click()
-    assert window.step_spin.value() == 0.02
+    assert window.pid_step_spin.value() == 0.02
+    assert window.sp_step_spin.value() == 1.0
+    window.pid_step_increase_button.click()
+    assert window.pid_step_spin.value() == 0.03
+    window.pid_step_decrease_button.click()
+    assert window.pid_step_spin.value() == 0.02
 
     start = window.kp_spin.value()
     window.kp_increase_button.click()
@@ -63,10 +64,26 @@ def test_pid_parameter_step_buttons_increase_and_decrease_values():
     assert row_layout.itemAt(1).widget() is window.kp_decrease_button
     assert row_layout.itemAt(2).widget() is window.kp_increase_button
 
-    step_layout = window.step_spin.parentWidget().layout()
-    assert step_layout.itemAt(0).widget() is window.step_spin
-    assert step_layout.itemAt(1).widget() is window.step_decrease_button
-    assert step_layout.itemAt(2).widget() is window.step_increase_button
+    sp_start = window.sp_spin.value()
+    window.sp_increase_button.click()
+    assert window.sp_spin.value() == sp_start + 1.0
+
+    window.sp_step_decrease_button.click()
+    assert window.sp_step_spin.value() == 0.9
+    assert window.kp_spin.singleStep() == 0.02
+    sp_after_step_change = window.sp_spin.value()
+    window.sp_increase_button.click()
+    assert window.sp_spin.value() == sp_after_step_change + 0.9
+
+    pid_step_layout = window.pid_step_spin.parentWidget().layout()
+    assert pid_step_layout.itemAt(0).widget() is window.pid_step_spin
+    assert pid_step_layout.itemAt(1).widget() is window.pid_step_decrease_button
+    assert pid_step_layout.itemAt(2).widget() is window.pid_step_increase_button
+
+    sp_step_layout = window.sp_step_spin.parentWidget().layout()
+    assert sp_step_layout.itemAt(0).widget() is window.sp_step_spin
+    assert sp_step_layout.itemAt(1).widget() is window.sp_step_decrease_button
+    assert sp_step_layout.itemAt(2).widget() is window.sp_step_increase_button
 
     window.close()
     app.processEvents()

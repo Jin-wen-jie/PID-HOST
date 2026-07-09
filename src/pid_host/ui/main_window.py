@@ -153,15 +153,35 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         form = QFormLayout()
-        step_row, self.step_spin, self.step_decrease_button, self.step_increase_button = self._step_control()
+        (
+            pid_step_row,
+            self.pid_step_spin,
+            self.pid_step_decrease_button,
+            self.pid_step_increase_button,
+        ) = self._step_control(default_value=0.02, step_value=0.01, tooltip_name="PID步长")
+        self.pid_step_spin.valueChanged.connect(self._update_parameter_step)
         kp_row, self.kp_spin, self.kp_decrease_button, self.kp_increase_button = self._parameter_control(1.0)
         ki_row, self.ki_spin, self.ki_decrease_button, self.ki_increase_button = self._parameter_control(0.0)
         kd_row, self.kd_spin, self.kd_decrease_button, self.kd_increase_button = self._parameter_control(0.0)
-        sp_row, self.sp_spin, self.sp_decrease_button, self.sp_increase_button = self._parameter_control(50.0)
-        form.addRow("步长", step_row)
+        (
+            sp_step_row,
+            self.sp_step_spin,
+            self.sp_step_decrease_button,
+            self.sp_step_increase_button,
+        ) = self._step_control(default_value=1.0, step_value=0.1, tooltip_name="SP步长")
+        self.step_spin = self.pid_step_spin
+        self.step_decrease_button = self.pid_step_decrease_button
+        self.step_increase_button = self.pid_step_increase_button
+        sp_row, self.sp_spin, self.sp_decrease_button, self.sp_increase_button = self._parameter_control(
+            50.0,
+            self.sp_step_spin.value(),
+        )
+        self.sp_step_spin.valueChanged.connect(self._update_sp_step)
+        form.addRow("PID步长", pid_step_row)
         form.addRow("Kp", kp_row)
         form.addRow("Ki", ki_row)
         form.addRow("Kd", kd_row)
+        form.addRow("SP步长", sp_step_row)
         form.addRow("SP", sp_row)
         layout.addLayout(form)
 
@@ -191,34 +211,38 @@ class MainWindow(QMainWindow):
         layout.addStretch(1)
         return panel
 
-    def _double_spin(self, value: float) -> QDoubleSpinBox:
+    def _double_spin(self, value: float, step: float | None = None) -> QDoubleSpinBox:
         spin = QDoubleSpinBox()
         spin.setDecimals(4)
         spin.setRange(-1_000_000.0, 1_000_000.0)
         spin.setValue(value)
-        spin.setSingleStep(self.step_spin.value())
+        spin.setSingleStep(step if step is not None else self.pid_step_spin.value())
         spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         return spin
 
-    def _step_spin(self) -> QDoubleSpinBox:
+    def _step_spin(self, default_value: float, step_value: float) -> QDoubleSpinBox:
         spin = QDoubleSpinBox()
         spin.setDecimals(4)
         spin.setRange(0.0001, 1000.0)
-        spin.setValue(0.02)
-        spin.setSingleStep(0.01)
+        spin.setValue(default_value)
+        spin.setSingleStep(step_value)
         spin.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-        spin.valueChanged.connect(self._update_parameter_step)
         return spin
 
-    def _step_control(self) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
+    def _step_control(
+        self,
+        default_value: float,
+        step_value: float,
+        tooltip_name: str,
+    ) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        spin = self._step_spin()
-        decrease = self._step_button("-", "减少步长")
-        increase = self._step_button("+", "增加步长")
+        spin = self._step_spin(default_value, step_value)
+        decrease = self._step_button("-", f"减少{tooltip_name}")
+        increase = self._step_button("+", f"增加{tooltip_name}")
         decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
         increase.clicked.connect(lambda _checked=False, target=spin: target.stepUp())
         layout.addWidget(spin, stretch=1)
@@ -226,13 +250,17 @@ class MainWindow(QMainWindow):
         layout.addWidget(increase)
         return row, spin, decrease, increase
 
-    def _parameter_control(self, value: float) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
+    def _parameter_control(
+        self,
+        value: float,
+        step: float | None = None,
+    ) -> tuple[QWidget, QDoubleSpinBox, QToolButton, QToolButton]:
         row = QWidget()
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        spin = self._double_spin(value)
+        spin = self._double_spin(value, step)
         decrease = self._step_button("-", "减少参数")
         increase = self._step_button("+", "增加参数")
         decrease.clicked.connect(lambda _checked=False, target=spin: target.stepDown())
@@ -256,10 +284,13 @@ class MainWindow(QMainWindow):
             getattr(self, "kp_spin", None),
             getattr(self, "ki_spin", None),
             getattr(self, "kd_spin", None),
-            getattr(self, "sp_spin", None),
         ):
             if spin is not None:
                 spin.setSingleStep(step)
+
+    def _update_sp_step(self, step: float) -> None:
+        if hasattr(self, "sp_spin"):
+            self.sp_spin.setSingleStep(step)
 
     def _apply_style(self) -> None:
         self.setStyleSheet(
