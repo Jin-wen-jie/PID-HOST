@@ -29,18 +29,26 @@ class TelemetryBuffer:
     def clear(self) -> None:
         self._samples.clear()
 
-    def samples(self) -> list[TelemetrySample]:
-        return list(self._samples)
+    def samples(self, ch: int | None = None) -> list[TelemetrySample]:
+        if ch is None:
+            return list(self._samples)
+        return [sample for sample in self._samples if sample.ch == ch]
 
-    def latest(self) -> TelemetrySample | None:
-        return self._samples[-1] if self._samples else None
+    def latest(self, ch: int | None = None) -> TelemetrySample | None:
+        if ch is None:
+            return self._samples[-1] if self._samples else None
+        for sample in reversed(self._samples):
+            if sample.ch == ch:
+                return sample
+        return None
 
-    def series(self) -> tuple[list[float], list[float], list[float], list[float]]:
+    def series(self, ch: int | None = None) -> tuple[list[float], list[float], list[float], list[float]]:
+        samples = self.samples(ch=ch)
         return (
-            [item.device_time_ms / 1000.0 for item in self._samples],
-            [item.sp for item in self._samples],
-            [item.pv for item in self._samples],
-            [item.out for item in self._samples],
+            [item.device_time_ms / 1000.0 for item in samples],
+            [item.sp for item in samples],
+            [item.pv for item in samples],
+            [item.out for item in samples],
         )
 
 

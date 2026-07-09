@@ -87,3 +87,86 @@ def test_pid_parameter_step_buttons_increase_and_decrease_values():
 
     window.close()
     app.processEvents()
+
+
+def test_main_window_switches_between_independent_motor_channels():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from pid_host.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(demo_mode=False)
+    sent: list[tuple[str, dict[str, object]]] = []
+    window._send_command = lambda message_type, **fields: sent.append((message_type, fields))
+
+    assert window.channel_combo.currentData() == 0
+    window.kp_spin.setValue(1.2)
+    window.ki_spin.setValue(0.05)
+    window.kd_spin.setValue(0.01)
+    window.sp_spin.setValue(50.0)
+
+    window.channel_combo.setCurrentIndex(1)
+    assert window.channel_combo.currentData() == 1
+    assert window.kp_spin.value() == 1.0
+    assert window.ki_spin.value() == 0.0
+    assert window.kd_spin.value() == 0.0
+    assert window.sp_spin.value() == 50.0
+
+    window.kp_spin.setValue(0.8)
+    window.ki_spin.setValue(0.03)
+    window.kd_spin.setValue(0.02)
+    window.sp_spin.setValue(80.0)
+    window.send_pid()
+    window.send_sp()
+
+    assert sent == [
+        ("set_pid", {"ch": 1, "kp": 0.8, "ki": 0.03, "kd": 0.02}),
+        ("set_sp", {"ch": 1, "sp": 80.0}),
+    ]
+
+    window.channel_combo.setCurrentIndex(0)
+    assert window.kp_spin.value() == 1.2
+    assert window.ki_spin.value() == 0.05
+    assert window.kd_spin.value() == 0.01
+    assert window.sp_spin.value() == 50.0
+
+    window.close()
+    app.processEvents()
+
+
+def test_main_window_filters_latest_values_and_plot_by_selected_motor_channel():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+
+    from pid_host.data import TelemetrySample
+    from pid_host.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    window = MainWindow(demo_mode=False)
+
+    window.add_telemetry(
+        TelemetrySample("2026-07-09T10:00:00.000", device_time_ms=1000, ch=0, sp=50.0, pv=48.0, out=30.0)
+    )
+    window.add_telemetry(
+        TelemetrySample("2026-07-09T10:00:00.100", device_time_ms=1100, ch=1, sp=80.0, pv=75.0, out=45.0)
+    )
+
+    assert window.current_sp_label.text() == "50"
+    assert window.current_pv_label.text() == "48"
+    assert window.current_out_label.text() == "30"
+
+    window.channel_combo.setCurrentIndex(1)
+    assert window.current_sp_label.text() == "80"
+    assert window.current_pv_label.text() == "75"
+    assert window.current_out_label.text() == "45"
+
+    window.refresh_plot()
+    x, y = window.curve_sp.getData()
+    assert list(x) == [1.1]
+    assert list(y) == [80.0]
+
+    window.close()
+    app.processEvents()

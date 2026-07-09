@@ -14,6 +14,7 @@ ERROR_CODES = {
     "unsupported",
     "busy",
 }
+SUPPORTED_CHANNELS = (0, 1)
 
 
 class ProtocolError(ValueError):
@@ -99,8 +100,10 @@ def parse_incoming(line: str | bytes) -> IncomingMessage:
             proto=_required_int(payload, "proto"),
         )
     if message_type == "tel":
+        ch = _required_int(payload, "ch")
+        _validate_channel(ch)
         return TelemetryMessage(
-            ch=_required_int(payload, "ch"),
+            ch=ch,
             t=_required_int(payload, "t"),
             sp=_required_float(payload, "sp"),
             pv=_required_float(payload, "pv"),
@@ -110,16 +113,14 @@ def parse_incoming(line: str | bytes) -> IncomingMessage:
 
 
 def validate_pid_values(ch: int, kp: float, ki: float, kd: float) -> None:
-    if ch != 0:
-        raise ProtocolError("bad_value", "first version only supports ch=0")
+    _validate_channel(ch)
     for name, value in {"kp": kp, "ki": ki, "kd": kd}.items():
         if not _is_finite_number(value):
             raise ProtocolError("bad_value", f"{name} must be finite")
 
 
 def validate_setpoint(ch: int, sp: float) -> None:
-    if ch != 0:
-        raise ProtocolError("bad_value", "first version only supports ch=0")
+    _validate_channel(ch)
     if not _is_finite_number(sp):
         raise ProtocolError("bad_value", "sp must be finite")
 
@@ -208,3 +209,8 @@ def _required_float(payload: dict[str, Any], field: str) -> float:
 
 def _is_finite_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _validate_channel(ch: int) -> None:
+    if ch not in SUPPORTED_CHANNELS:
+        raise ProtocolError("bad_value", "supported channels are ch=0 and ch=1")

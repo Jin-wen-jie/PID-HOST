@@ -11,6 +11,7 @@ from pid_host.protocol import (
     encode_command,
     parse_incoming,
     validate_pid_values,
+    validate_setpoint,
 )
 
 
@@ -47,13 +48,25 @@ def test_parse_incoming_rejects_missing_telemetry_field():
     assert exc.value.code == "missing_field"
 
 
-def test_validate_pid_values_rejects_nan_and_nonzero_channel():
+def test_validate_pid_values_accepts_two_motor_channels_and_rejects_invalid_channel():
+    validate_pid_values(ch=0, kp=1.0, ki=0.0, kd=0.0)
+    validate_pid_values(ch=1, kp=1.0, ki=0.0, kd=0.0)
+
     with pytest.raises(ProtocolError) as exc:
-        validate_pid_values(ch=1, kp=1.0, ki=0.0, kd=0.0)
+        validate_pid_values(ch=2, kp=1.0, ki=0.0, kd=0.0)
     assert exc.value.code == "bad_value"
 
     with pytest.raises(ProtocolError):
         validate_pid_values(ch=0, kp=math.nan, ki=0.0, kd=0.0)
+
+
+def test_validate_setpoint_accepts_two_motor_channels_and_rejects_invalid_channel():
+    validate_setpoint(ch=0, sp=50.0)
+    validate_setpoint(ch=1, sp=80.0)
+
+    with pytest.raises(ProtocolError) as exc:
+        validate_setpoint(ch=2, sp=50.0)
+    assert exc.value.code == "bad_value"
 
 
 def test_command_tracker_allows_one_pending_command_and_matches_ack():

@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..config import AppConfig
+from ..config import AppConfig, PidChannelConfig
 from ..data import CsvRecorder, TelemetryBuffer, TelemetrySample
 from ..protocol import (
     AckMessage,
@@ -57,6 +57,9 @@ class MainWindow(QMainWindow):
         self.generator = DemoGenerator()
         self.serial_worker: SerialWorker | None = None
         self.paused = False
+        self.channel_values = {0: PidChannelConfig(ch=0), 1: PidChannelConfig(ch=1)}
+        self.current_channel = 0
+        self._loading_channel = False
 
         self._build_ui()
         self._apply_style()
@@ -153,6 +156,9 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         form = QFormLayout()
+        self.channel_combo = QComboBox()
+        self.channel_combo.addItem("电机1 (CH0)", 0)
+        self.channel_combo.addItem("电机2 (CH1)", 1)
         (
             pid_step_row,
             self.pid_step_spin,
@@ -177,6 +183,7 @@ class MainWindow(QMainWindow):
             self.sp_step_spin.value(),
         )
         self.sp_step_spin.valueChanged.connect(self._update_sp_step)
+        form.addRow("电机", self.channel_combo)
         form.addRow("PID步长", pid_step_row)
         form.addRow("Kp", kp_row)
         form.addRow("Ki", ki_row)
@@ -320,6 +327,42 @@ class MainWindow(QMainWindow):
         self.pause_button.clicked.connect(self.toggle_pause)
         self.clear_button.clicked.connect(self.clear_plot)
         self.demo_checkbox.toggled.connect(self._set_demo_mode)
+        self.channel_combo.currentIndexChanged.connect(self._on_channel_changed)
+
+    def _selected_channel(self) -> int:
+        data = self.channel_combo.currentData()
+        return int(data) if data is not None else 0
+
+    def _read_channel_values(self, ch: int) -> PidChannelConfig:
+        return PidChannelConfig(
+            ch=ch,
+            kp=self.kp_spin.value(),
+            ki=self.ki_spin.value(),
+            kd=self.kd_spin.value(),
+            sp=self.sp_spin.value(),
+        )
+
+    def _store_current_channel_values(self) -> None:
+        self.channel_values[self.current_channel] = self._read_channel_values(self.current_channel)
+
+    def _load_channel_values(self, ch: int) -> None:
+        values = self.channel_values.get(ch, PidChannelConfig(ch=ch))
+        self.kp_spin.setValue(values.kp)
+        self.ki_spin.setValue(values.ki)
+        self.kd_spin.setValue(values.kd)
+        self.sp_spin.setValue(values.sp)
+        self._refresh_latest_values()
+
+    def _on_channel_changed(self, _index: int = -1) -> None:
+        if self._loading_channel:
+            return
+        next_channel = self._selected_channel()
+        if next_channel == self.current_channel:
+            return
+        self._store_current_channel_values()
+        self.current_channel = next_channel
+        self._load_channel_values(next_channel)
+        self.refresh_plot()
 
     def refresh_ports(self) -> None:
         current = self.port_combo.currentText()
@@ -434,27 +477,37 @@ class MainWindow(QMainWindow):
 
     def _handle_demo_command(self, message_type: str, seq: int, fields: dict[str, object]) -> None:
         if message_type == "set_sp":
-            self.generator.set_sp(float(fields["sp"]))
+            self.generator.set_sp(ch=int(fields["ch"]), sp=float(fields["sp"]))
         self.tracker.handle_response(AckMessage(seq=seq))
         self.log(f"模拟 ACK：{message_type}")
 
     def send_pid(self) -> None:
+        ch = self.current_channel
         kp, ki, kd = self.kp_spin.value(), self.ki_spin.value(), self.kd_spin.value()
+        self.channel_values[ch] = PidChannelConfig(ch=ch, kp=kp, ki=ki, kd=kd, sp=self.sp_spin.value())
         try:
-            validate_pid_values(ch=0, kp=kp, ki=ki, kd=kd)
+            validate_pid_values(ch=ch, kp=kp, ki=ki, kd=kd)
         except ProtocolError as exc:
             self._show_error(exc.message)
             return
-        self._send_command("set_pid", ch=0, kp=kp, ki=ki, kd=kd)
+        self._send_command("set_pid", ch=ch, kp=kp, ki=ki, kd=kd)
 
     def send_sp(self) -> None:
+        ch = self.current_channel
         sp = self.sp_spin.value()
+        self.channel_values[ch] = PidChannelConfig(
+            ch=ch,
+            kp=self.kp_spin.value(),
+            ki=self.ki_spin.value(),
+            kd=self.kd_spin.value(),
+            sp=sp,
+        )
         try:
-            validate_setpoint(ch=0, sp=sp)
+            validate_setpoint(ch=ch, sp=sp)
         except ProtocolError as exc:
             self._show_error(exc.message)
             return
-        self._send_command("set_sp", ch=0, sp=sp)
+        self._send_command("set_sp", ch=ch, sp=sp)
 
     def start_demo(self) -> None:
         self.demo_mode = True
@@ -476,15 +529,29 @@ class MainWindow(QMainWindow):
             self.log("模拟数据模式已停止")
 
     def _tick_demo(self) -> None:
-        self.add_telemetry(self.generator.next_sample())
+        for sample in self.generator.next_samples():
+            self.add_telemetry(sample)
 
     def add_telemetry(self, sample: TelemetrySample) -> None:
         self.buffer.add(sample)
+        if sample.ch == self.current_channel:
+            self._show_latest_sample(sample)
+        if self.recorder.is_recording:
+            self.recorder.write(sample)
+
+    def _show_latest_sample(self, sample: TelemetrySample) -> None:
         self.current_sp_label.setText(f"{sample.sp:.4g}")
         self.current_pv_label.setText(f"{sample.pv:.4g}")
         self.current_out_label.setText(f"{sample.out:.4g}")
-        if self.recorder.is_recording:
-            self.recorder.write(sample)
+
+    def _refresh_latest_values(self) -> None:
+        sample = self.buffer.latest(ch=self.current_channel)
+        if sample is None:
+            self.current_sp_label.setText("-")
+            self.current_pv_label.setText("-")
+            self.current_out_label.setText("-")
+            return
+        self._show_latest_sample(sample)
 
     def refresh_plot(self) -> None:
         timed_out = self.tracker.check_timeout(int(datetime.now().timestamp() * 1000))
@@ -492,7 +559,7 @@ class MainWindow(QMainWindow):
             self.log(f"命令超时：{timed_out}")
         if self.paused:
             return
-        x, sp, pv, out = self.buffer.series()
+        x, sp, pv, out = self.buffer.series(ch=self.current_channel)
         self.curve_sp.setData(x, sp)
         self.curve_pv.setData(x, pv)
         self.curve_out.setData(x, out)
@@ -504,6 +571,7 @@ class MainWindow(QMainWindow):
     def clear_plot(self) -> None:
         self.buffer.clear()
         self.refresh_plot()
+        self._refresh_latest_values()
         self.log("曲线已清空")
 
     def toggle_recording(self) -> None:
@@ -541,13 +609,12 @@ class MainWindow(QMainWindow):
             self._apply_config(AppConfig.load(self.config_path))
 
     def _current_config(self) -> AppConfig:
+        self._store_current_channel_values()
         return AppConfig(
             port=self.port_combo.currentText(),
             baudrate=int(self.baud_combo.currentText()),
-            kp=self.kp_spin.value(),
-            ki=self.ki_spin.value(),
-            kd=self.kd_spin.value(),
-            sp=self.sp_spin.value(),
+            selected_ch=self.current_channel,
+            channels=tuple(self.channel_values[ch] for ch in sorted(self.channel_values)),
             raw_frames_visible=self.raw_checkbox.isChecked(),
         )
 
@@ -557,10 +624,21 @@ class MainWindow(QMainWindow):
         if config.port:
             self.port_combo.setCurrentText(config.port)
         self.baud_combo.setCurrentText(str(config.baudrate))
-        self.kp_spin.setValue(config.kp)
-        self.ki_spin.setValue(config.ki)
-        self.kd_spin.setValue(config.kd)
-        self.sp_spin.setValue(config.sp)
+        self.channel_values = {channel.ch: channel for channel in config.channels}
+        for ch in (0, 1):
+            self.channel_values.setdefault(ch, PidChannelConfig(ch=ch))
+        selected_ch = config.selected_ch if config.selected_ch in self.channel_values else 0
+        self._loading_channel = True
+        try:
+            self.current_channel = selected_ch
+            index = self.channel_combo.findData(selected_ch)
+            if index >= 0:
+                self.channel_combo.setCurrentIndex(index)
+            self._load_channel_values(selected_ch)
+        finally:
+            self._loading_channel = False
+        for channel in self.channel_values.values():
+            self.generator.set_sp(ch=channel.ch, sp=channel.sp)
         self.raw_checkbox.setChecked(config.raw_frames_visible)
 
     def log(self, message: str) -> None:
